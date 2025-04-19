@@ -1,0 +1,59 @@
+# This workflow will do a clean installation of node dependencies,
+# cache/restore them, compile the source code, run tests and then generate and publish badges
+
+name: Test {displayName} CI
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      DISPLAY: ":99.0"
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      ## For testing the workflow locally,
+      ## you can uncomment the following lines to copy node_modules
+      ## and vscode from a Docker image
+      ## and comment out the Set up Node.js and Install Node.js dependencies steps.
+
+      # - name: Copy node_modules and vscode from Docker image
+      #   run: |
+      #     cp -r /app/.vscode-test ./.vscode-test
+      #     cp -r /app/node_modules ./node_modules
+
+      - name: Set up Node.js v${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Setup headless display
+        uses: pyvista/setup-headless-display-action@v3
+
+      - name: Prepare tests
+        run: npm run pretest
+
+      - name: Run tests (headless)
+        run: npm run test:coverage

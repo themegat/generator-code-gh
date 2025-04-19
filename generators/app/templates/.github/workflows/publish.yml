@@ -1,0 +1,38 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, 
+# compile the source code and then publish the extension
+
+name: Publish {displayName} CI
+
+on: 
+    release:
+        types: 
+            - published
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [22.x]
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+            
+            - name: Set up Node.js v${{ matrix.node-version }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+            
+            - name: Install Node.js dependencies
+              run: npm ci
+
+            - name: Compile source code
+              run: npm run vscode:prepublish
+
+            - name: Publish extension
+              run: npm run publish
+              env:
+                VSCE_PAT: ${{ secrets.VSCE_PAT }}

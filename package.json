@@ -1,0 +1,19 @@
+{
+  "name": "generator-code-gh",
+  "version": "0.1.0",
+  "description": "A Yeoman generator for scaffolding VS Code extensions and GitHub workflows. \n\nThe generator will scaffolding a VS Code extension and a GitHub workflow for the extension. \n\nThe setup is pre-baked with a configuration to test GitHub workflows locally using act.",
+  "main": "generators/app/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "yeoman-generator",
+    "vscode",
+    "extension"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "yeoman-generator": "^5.7.0"
+  }
+}
