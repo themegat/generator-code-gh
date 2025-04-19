@@ -14,6 +14,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "generator-code": "^1.11.8",
     "yeoman-generator": "^5.7.0"
   }
 }

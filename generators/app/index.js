@@ -1,137 +1,67 @@
 const Generator = require("yeoman-generator");
 
 module.exports = class extends Generator {
-  initializing() {
-    this.log(`
-      _-----_     ╭──────────────────────────╮
-     |       |    │ Setup you Visual Studio  │
-     |--(o)--|    │   Code Extension +       │
-    '---------´   │    Github Workflows      │
-     ( _'U'_ )    ╰──────────────────────────╯
-     /___A___\   /
-      |  ~  |
-    __'.___.'__
-  '   '  |° ' Y '
-    `);
-  }
+  initializing() {}
 
   prompting() {
-    return this.prompt([
-      {
-        type: "input",
-        name: "extensionName",
-        message: "Your VS Code extension name",
-        default: this.appname, // Default to current folder name
-        validate: (input) => (input ? true : "Extension name is required."), // Make appname required
-      },
-    ]).then((answers) => {
-      this.extensionName = answers.extensionName;
-      return this.prompt([
-        {
-          type: "input",
-          name: "displayName",
-          message: `Your VS Code extension display name (${answers.extensionName})`,
-          default: answers.extensionName, // Default display name to extensionName
-        },
-        {
-          type: "input",
-          name: "description",
-          message: "Your VS Code extension description",
-          default: "My Visual Studio Code extension", // Default description
-        },
-        {
-          type: "confirm",
-          name: "initializeGit",
-          message: "Would you like to initialize a git repository?",
-          default: false, // Default to no
-        },
-      ]).then((secondAnswers) => {
-        this.displayName = secondAnswers.displayName;
-        this.description = secondAnswers.description;
-        this.initializeGit = secondAnswers.initializeGit;
-      });
+    return this.composeWith(require.resolve("generator-code"), {
+      extensionType: "",
+      extensionName: this.options.extensionName || this.appname,
+      displayName: this.options.displayName || this.appname,
+      description:
+        this.options.description || "My Visual Studio Code extension",
+    }).then((answers) => {
+      // Store the extensionName for use in the writing phase
+      this.extensionConfig = answers.extensionConfig;
     });
   }
 
   writing() {
-    this.fs.copyTpl(
-      this.templatePath("**/*"),
-      this.destinationPath(this.extensionName),
-      { extensionName: this.extensionName },
-      {},
-      { globOptions: { dot: true } } // Include hidden files and directories
-    );
+    // Access the extensionName stored in the prompting phase
+    const extensionName = this.extensionConfig.name;
+    const displayName = this.extensionConfig.displayName;
 
-    // Update displayName in package.json
-    const packageJsonPath = this.destinationPath(
-      this.extensionName,
-      "package.json"
-    );
-    const packageJson = this.fs.readJSON(packageJsonPath);
-    packageJson.name = this.appname;
-    packageJson.displayName = this.displayName;
-    packageJson.description = this.description;
-    this.fs.writeJSON(packageJsonPath, packageJson);
+    // Copy only the .docker and .github directories and their contents
+    const directoriesToCopy = [".docker", ".github", ".scripts", ".actrc"];
 
-    // Replace {displayName} in workflows
-    const workflows = [".github/workflows/test.yml", ".github/workflows/publish.yml"];
-    workflows.forEach((workflow) => {
-      const workflowPath = this.destinationPath(this.extensionName, workflow);
-      if (this.fs.exists(workflowPath)) {
-        let content = this.fs.read(workflowPath);
-        content = content.replace(/{displayName}/g, this.displayName);
-        this.fs.write(workflowPath, content);
-      }
+    directoriesToCopy.forEach((dir) => {
+      this.fs.copy(
+        this.templatePath(dir),
+        this.destinationPath(`${extensionName}/${dir}`)
+      );
     });
+
+      // Replace {displayName} in workflows
+      const workflows = [
+        ".github/workflows/test.yml",
+        ".github/workflows/publish.yml",
+      ];
+      workflows.forEach((workflow) => {
+        const workflowPath = this.destinationPath(extensionName, workflow);
+        if (this.fs.exists(workflowPath)) {
+          let content = this.fs.read(workflowPath);
+          content = content.replace(/{displayName}/g, displayName);
+          this.fs.write(workflowPath, content);
+        }
+      });
   }
 
   install() {
-    return this.prompt([
-      {
-        type: "confirm",
-        name: "runNpmInstall",
-        message: "Would you like to run npm install?",
-        default: true,
-      },
-    ]).then((answers) => {
-      if (answers.runNpmInstall) {
-        this.log(
-          "Running npm install for you to install the required dependencies."
-        );
+    const extensionName = this.extensionConfig.name;
 
-        this.spawnCommandSync("npm", ["install"], {
-          cwd: this.destinationPath(this.extensionName),
-        });
-      } else {
-        this.log(
-          "Skipping npm install. You can run it later in the project directory."
-        );
-      }
-
-      if (this.initializeGit) {
-        this.spawnCommandSync("git", ["init"], {
-          cwd: this.destinationPath(this.extensionName),
-        });
-      }
-    });
-  }
-
-  end() {
-    this.log("Your VS Code extension project has been successfully created!");
-
-    return this.prompt([
-      {
-        type: "confirm",
-        name: "openInVSCode",
-        message: "Would you like to open the project in VS Code?",
-        default: true,
-      },
-    ]).then((answers) => {
-      if (answers.openInVSCode) {
-        this.spawnCommandSync("code", [
-          this.destinationPath(this.extensionName),
-        ]);
-      }
-    });
+    // Update the package.json
+    const packageJsonPath = this.destinationPath(extensionName, "package.json");
+    const packageJson = this.fs.readJSON(packageJsonPath);
+    packageJson.scripts = {
+      ...packageJson.scripts,
+      "test:coverage":
+        "vscode-test --label 0 --coverage --coverage-reporter json-summary --coverage-output coverage/coverage-summary",
+      "docker:build-test":
+        "docker build -f .docker/test/dockerfile --pull=false -t act-test-ubuntu-node .",
+      "act:test":
+        'act --pull=false --workflows ".github/workflows/test.yml" --secret-file "" --var-file "" --input-file "" --eventpath ""',
+      "vscode:download": "node ./scripts/vscode_downloader.js",
+    };
+    this.fs.writeJSON(packageJsonPath, packageJson);
   }
 };
