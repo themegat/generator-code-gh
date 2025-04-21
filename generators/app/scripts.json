@@ -1,0 +1,10 @@
+{
+  "scripts-workflow": {
+    "test:coverage": "vscode-test --label 0 --coverage --coverage-reporter json-summary --coverage-output coverage/coverage-summary"
+  },
+  "scripts-act": {
+    "docker:build-test": "docker build -f .docker/test.dockerfile --pull=false -t act-test-ubuntu-node .",
+    "act:test": "act --pull=false --workflows \".github/workflows/test.yml\" --secret-file \"\" --var-file \"\" --input-file \"\" --eventpath \"\"",
+    "vscode:download": "node ./.docker/scripts/vscode_downloader.js"
+  }
+}

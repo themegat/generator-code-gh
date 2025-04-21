@@ -1,6 +1,6 @@
 const Generator = require("yeoman-generator");
-const _ = require("lodash");
-const fs = require("fs");
+const Prompts = require("./prompts");
+const Execute = require("./execute");
 
 module.exports = class extends Generator {
   initializing() {}
@@ -19,77 +19,90 @@ module.exports = class extends Generator {
     });
   }
 
-  writing() {
-    return this.prompt([
-      {
-        type: "input",
-        name: "displayName",
-        message: "What's the display name of your extension?",
-        default: this.extensionConfig.displayName,
-      },
-      {
-        type: "confirm",
-        name: "runNpmInstall",
-        message: "Would you like to run npm install?",
-        default: true,
-      },
-    ]).then((answers) => {
-      this.extensionConfig.displayName = answers.displayName;
-      this.env.options.skipInstall = !answers.runNpmInstall;
-
-      // Access the extensionName stored in the prompting phase
+  async _buildActImage() {
+    try {
       const extensionName = this.extensionConfig.name;
-      const displayName = this.extensionConfig.displayName;
-
-      // Copy the .actrc file and .docker .scripts directories and their contents
-      const directoriesToCopy = [".docker", ".github", ".scripts", ".actrc"];
-      directoriesToCopy.forEach((dir) => {
-        this.fs.copy(
-          this.templatePath(dir),
-          this.destinationPath(extensionName, dir)
-        );
+      const executionPath = this.destinationPath(extensionName);
+      await this.spawnCommandSync("docker", ["--version"]);
+      this.log("Docker is installed. Building the image...");
+      await this.spawnCommandSync("npm", ["run", "-t", "docker:build-test"], {
+        cwd: executionPath,
       });
+    } catch (error) {
+      this.log("Docker is not installed. Skipping image build.");
+      this.log.error(
+        "Install Docker then run `npm run docker:build-test` in the project root."
+      );
+    }
+  }
 
-      // Copy the GitHub Actions workflow files and overwrite the placeholders
-      const workflows = [
-        ".github/workflows/test.yml",
-        ".github/workflows/publish.yml",
-      ];
-      workflows.forEach((workflow) => {
-        const workflowPath = this.destinationPath(extensionName, workflow);
-        if (this.fs.exists(workflowPath)) {
-          let content = this.fs.read(workflowPath);
-          content = content.replace(/{displayName}/g, displayName);
-          this.fs.write(workflowPath, content);
-        }
-      });
+  _writing(displayName, configAct) {
+    this.extensionConfig.displayName = displayName;
+    this.extensionConfig.configAct = configAct;
+
+    // Access the extensionName stored in the prompting phase
+    const extensionName = this.extensionConfig.name;
+    const _displayName = this.extensionConfig.displayName;
+
+    // Copy the .actrc file and .docker .scripts directories and their contents
+    const directoriesToCopy = [".github"];
+    if (configAct) {
+      directoriesToCopy.push(".docker", ".actrc");
+    }
+    Execute.copyFilesAndDirectories(this, extensionName, directoriesToCopy);
+
+    // Copy the GitHub Actions workflow files and overwrite the placeholders
+    const workflows = [
+      ".github/workflows/test.yml",
+      ".github/workflows/publish.yml",
+    ];
+    Execute.copyWorkflows(this, extensionName, workflows, _displayName);
+  }
+
+  writing() {
+    return this.prompt([Prompts.askForGitWorkflowConfig()]).then((answers) => {
+      this.extensionConfig.configGithubWorkflows =
+        answers.configGithubWorkflows;
+      if (answers.configGithubWorkflows) {
+        return this.prompt([
+          Prompts.askForDisplayName(this.extensionConfig.displayName),
+          Prompts.askForActConfig(),
+          Prompts.askToRunNpmInstall(),
+        ]).then((answers) => {
+          const displayName = answers.displayName;
+          this.env.options.skipInstall = !answers.runNpmInstall;
+          this.extensionConfig.runNpmInstall = answers.runNpmInstall;
+          const configAct = answers.configAct;
+          if (configAct) {
+            return this.prompt([Prompts.askToBuildActImage()]).then(
+              (answers) => {
+                this.extensionConfig.buildActImage = answers.buildActImage;
+                this._writing(displayName, configAct);
+              }
+            );
+          } else {
+            this._writing(displayName, configAct, false);
+          }
+        });
+      } else {
+        return this.prompt([Prompts.askToRunNpmInstall()]).then((answers) => {
+          this.env.options.skipInstall = !answers.runNpmInstall;
+          this.extensionConfig.runNpmInstall = answers.runNpmInstall;
+        });
+      }
     });
   }
 
   install() {
-    const extensionName = this.extensionConfig.name;
-    const displayName = this.extensionConfig.displayName;
-
-    // Update the package.json
-    const pkgJson = {
-      displayName: displayName,
-      scripts: {
-        "test:coverage":
-          "vscode-test --label 0 --coverage --coverage-reporter json-summary --coverage-output coverage/coverage-summary",
-        "docker:build-test":
-          "docker build -f .docker/test/dockerfile --pull=false -t act-test-ubuntu-node .",
-        "act:test":
-          'act --pull=false --workflows ".github/workflows/test.yml" --secret-file "" --var-file "" --input-file "" --eventpath ""',
-        "vscode:download": "node ./.scripts/vscode_downloader.js",
-      },
-    };
-    const packageJsonContent = this.fs.readJSON(
-      this.destinationPath(extensionName, "package.json")
-    );
-    const newPackageJsonContent = _.merge(packageJsonContent, pkgJson);
-    fs.writeFileSync(
-      this.destinationPath(extensionName, "package.json"),
-      JSON.stringify(newPackageJsonContent, null, 4)
-    );
+    if (this.extensionConfig.configGithubWorkflows) {
+      const extensionName = this.extensionConfig.name;
+      const displayName = this.extensionConfig.displayName;
+      const configAct = this.extensionConfig.configAct ?? false;
+      // Update the package.json
+      Execute.updatePackageJson(this, extensionName, displayName, configAct);
+    }
+    if (this.extensionConfig.buildActImage) {
+      this._buildActImage();
+    }
   }
 };

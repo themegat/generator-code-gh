@@ -11,7 +11,14 @@
     "vscode",
     "extension"
   ],
-  "author": "",
+  "author": {
+    "name": "T Motsoeneng",
+    "url": "https://github.com/themegat"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/themegat/generator-code-gh"
+  },
   "license": "MIT",
   "dependencies": {
     "generator-code": "^1.11.8",
