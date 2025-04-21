@@ -29,9 +29,9 @@ module.exports = class extends Generator {
         cwd: executionPath,
       });
     } catch (error) {
-      this.log("Docker is not installed. Skipping image build.");
+      this.log("Docker is either not running or not installed. Skipping image build.");
       this.log.error(
-        "Install Docker then run `npm run docker:build-test` in the project root."
+        "Start or install Docker then run `npm run docker:build-test` in the project root."
       );
     }
   }
@@ -67,11 +67,11 @@ module.exports = class extends Generator {
         return this.prompt([
           Prompts.askForDisplayName(this.extensionConfig.displayName),
           Prompts.askForActConfig(),
-          Prompts.askToRunNpmInstall(),
+          Prompts.askToRunPkgInstall(this.extensionConfig.pkgManager),
         ]).then((answers) => {
           const displayName = answers.displayName;
-          this.env.options.skipInstall = !answers.runNpmInstall;
-          this.extensionConfig.runNpmInstall = answers.runNpmInstall;
+          this.env.options.skipInstall = true;
+          this.extensionConfig.runPkgInstall = answers.runPkgInstall;
           const configAct = answers.configAct;
           if (configAct) {
             return this.prompt([Prompts.askToBuildActImage()]).then(
@@ -85,21 +85,40 @@ module.exports = class extends Generator {
           }
         });
       } else {
-        return this.prompt([Prompts.askToRunNpmInstall()]).then((answers) => {
-          this.env.options.skipInstall = !answers.runNpmInstall;
-          this.extensionConfig.runNpmInstall = answers.runNpmInstall;
+        return this.prompt([
+          Prompts.askToRunPkgInstall(this.extensionConfig.pkgManager),
+        ]).then((answers) => {
+          this.env.options.skipInstall = true;
+          this.extensionConfig.runPkgInstall = answers.runPkgInstall;
         });
       }
     });
   }
 
-  install() {
+  async install() {
+    const extensionName = this.extensionConfig.name;
     if (this.extensionConfig.configGithubWorkflows) {
-      const extensionName = this.extensionConfig.name;
       const displayName = this.extensionConfig.displayName;
       const configAct = this.extensionConfig.configAct ?? false;
       // Update the package.json
       Execute.updatePackageJson(this, extensionName, displayName, configAct);
+    }
+    if (this.extensionConfig.configAct) {
+      Execute.updateDockerFile(
+        this,
+        extensionName,
+        this.extensionConfig.pkgManager
+      );
+    }
+    if (this.extensionConfig.runPkgInstall) {
+      this.log(`Running ${this.extensionConfig.pkgManager} install ...`);
+      await this.spawnCommandSync(
+        this.extensionConfig.pkgManager,
+        ["install"],
+        {
+          cwd: this.destinationPath(extensionName),
+        }
+      );
     }
     if (this.extensionConfig.buildActImage) {
       this._buildActImage();

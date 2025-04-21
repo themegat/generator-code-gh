@@ -14,6 +14,18 @@ module.exports = class Execute {
     });
   }
 
+  static updateDockerFile(generator, extensionName, pkgManager) {
+    const filePath = generator.destinationPath(
+      extensionName,
+      ".docker/test.dockerfile"
+    );
+    if (generator.fs.exists(filePath)) {
+      let content = generator.fs.read(filePath);
+      content = content.replace(/{pkgManager}/g, pkgManager);
+      fs.writeFileSync(filePath, content);
+    }
+  }
+
   static copyWorkflows(generator, extensionName, workflows, displayName) {
     workflows.forEach((workflow) => {
       const workflowPath = generator.destinationPath(extensionName, workflow);

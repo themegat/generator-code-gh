@@ -10,11 +10,11 @@ module.exports = class Prompts {
     };
   }
 
-  static askToRunNpmInstall() {
+  static askToRunPkgInstall(pkgManager) {
     return {
       type: "confirm",
-      name: "runNpmInstall",
-      message: "Would you like to run npm install?",
+      name: "runPkgInstall",
+      message: `Would you like to run ${pkgManager} install?`,
       default: true,
     };
   }

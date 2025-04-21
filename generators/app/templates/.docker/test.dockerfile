@@ -71,7 +71,7 @@ COPY package.json ./
 COPY ./.docker/scripts/vscode_downloader.js ./.docker/scripts/
 
 # Install dependencies
-RUN npm i
+RUN {pkgManager} install
 
 # Download VS Code for testing
-RUN npm run vscode:download
+RUN {pkgManager} run vscode:download
